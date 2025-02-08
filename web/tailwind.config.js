@@ -18,6 +18,14 @@ export default {
         "shape-content":
           "0px 0px 0px 1px rgba(0, 0, 0, 0.25), inset 0px 1px 0px rgba(255, 255, 255, 0.02), inset 0px 0px 0px 1px rgba(255, 255, 255, 0.02)",
       },
+      animation: {
+        border: "border 2s linear infinite",
+      },
+      keyframes: {
+        border: {
+          to: { "--border-angle": "360deg" },
+        },
+      },
     },
   },
   plugins: [],
