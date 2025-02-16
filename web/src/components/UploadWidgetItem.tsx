@@ -2,8 +2,16 @@ import { Download, ImageUp, Link2, RefreshCcw, X } from "lucide-react";
 import { motion } from "motion/react";
 import * as Progress from "@radix-ui/react-progress";
 import { Button } from "./ui/Button";
+import { useUploads, type Upload } from "../store/uploads";
+import { formatFileSize } from "../utils/formatFileSize";
 
-export function UploadWidgetItem() {
+interface UploadWidgetItemProps {
+  upload: Upload;
+}
+
+export function UploadWidgetItem({ upload }: UploadWidgetItemProps) {
+  const cancelUpload = useUploads((store) => store.cancelUpload);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -14,11 +22,13 @@ export function UploadWidgetItem() {
       <div className="flex flex-col gap-1">
         <span className="text-xs font-medium flex items-center gap-1">
           <ImageUp className="size-3 text-zinc-300" strokeWidth={1.5} />
-          <span>screenshot.png</span>
+          <span>{upload.name}</span>
         </span>
 
         <span className="text-xxs text-zinc-400 flex gap-1.5 items-center">
-          <span className="line-through">3MB</span>
+          <span className="line-through">
+            {formatFileSize(upload.file.size)}
+          </span>
           <div className="size-1 rounded-full bg-zinc-700" />
           <span>
             300KB
@@ -49,7 +59,7 @@ export function UploadWidgetItem() {
           <RefreshCcw className="size-4" strokeWidth={1.5} />
           <span className="sr-only">Retry upload</span>
         </Button>
-        <Button size="icon-sm">
+        <Button size="icon-sm" onClick={() => cancelUpload(upload.uploadId)}>
           <X className="size-4" strokeWidth={1.5} />
           <span className="sr-only">Cancel upload</span>
         </Button>
