@@ -32,10 +32,25 @@ export const useUploads = create<UploadState, [["zustand/immer", never]]>(
       if (!upload) {
         return;
       }
-      await uploadFileToStorage({
-        file: upload.file,
-        signal: upload.abortController.signal,
-      });
+      try {
+        await uploadFileToStorage({
+          file: upload.file,
+          signal: upload.abortController.signal,
+        });
+        set((state) => {
+          state.uploads.set(uploadId, {
+            ...upload,
+            status: UploadStatus.success,
+          });
+        });
+      } catch (error) {
+        set((state) => {
+          state.uploads.set(uploadId, {
+            ...upload,
+            status: UploadStatus.error,
+          });
+        });
+      }
     }
     function addUploads(files: File[]) {
       for (const file of files) {
