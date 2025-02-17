@@ -2,6 +2,7 @@ import { enableMapSet } from "immer";
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import { uploadFileToStorage } from "../http/uploadFileToStorage";
+import { CanceledError } from "axios";
 
 export enum UploadStatus {
   progress = "progess",
@@ -16,6 +17,8 @@ export interface Upload {
   abortController: AbortController;
   status: UploadStatus;
   uploadId: string;
+  uploadSizeInBytes: number;
+  originalSizeInBytes: number;
 }
 
 interface UploadState {
@@ -36,6 +39,14 @@ export const useUploads = create<UploadState, [["zustand/immer", never]]>(
         await uploadFileToStorage({
           file: upload.file,
           signal: upload.abortController.signal,
+          onProgress(sizeInBytes) {
+            set((state) => {
+              state.uploads.set(uploadId, {
+                ...upload,
+                uploadSizeInBytes: sizeInBytes,
+              });
+            });
+          },
         });
         set((state) => {
           state.uploads.set(uploadId, {
@@ -44,6 +55,15 @@ export const useUploads = create<UploadState, [["zustand/immer", never]]>(
           });
         });
       } catch (error) {
+        if (error instanceof CanceledError) {
+          set((state) => {
+            state.uploads.set(uploadId, {
+              ...upload,
+              status: UploadStatus.canceled,
+            });
+          });
+          return;
+        }
         set((state) => {
           state.uploads.set(uploadId, {
             ...upload,
@@ -62,6 +82,8 @@ export const useUploads = create<UploadState, [["zustand/immer", never]]>(
           file,
           abortController,
           status: UploadStatus.progress,
+          originalSizeInBytes: file.size,
+          uploadSizeInBytes: 0,
         };
 
         set((state) => {
@@ -76,12 +98,6 @@ export const useUploads = create<UploadState, [["zustand/immer", never]]>(
         return;
       }
       upload.abortController.abort();
-      set((state) => {
-        state.uploads.set(uploadId, {
-          ...upload,
-          status: UploadStatus.canceled,
-        });
-      });
     }
     return {
       uploads: new Map(),

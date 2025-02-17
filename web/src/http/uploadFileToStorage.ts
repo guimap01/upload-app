@@ -3,11 +3,13 @@ import { uploadServer } from "../api";
 interface UploadFileToStorageParams {
   file: File;
   signal?: AbortSignal;
+  onProgress: (sizeInBytes: number) => void;
 }
 
 export async function uploadFileToStorage({
   file,
   signal,
+  onProgress,
 }: UploadFileToStorageParams) {
   const data = new FormData();
 
@@ -18,6 +20,9 @@ export async function uploadFileToStorage({
       "Content-Type": "multipart/form-data",
     },
     signal,
+    onUploadProgress(progressEvent) {
+      onProgress(progressEvent.loaded);
+    },
   });
 
   return { url: response.data.url };
