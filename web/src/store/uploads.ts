@@ -4,6 +4,7 @@ import { immer } from "zustand/middleware/immer";
 import { uploadFileToStorage } from "../http/uploadFileToStorage";
 import { CanceledError } from "axios";
 import { useShallow } from "zustand/shallow";
+import { compressImage } from "../utils/compressImage";
 
 export enum UploadStatus {
   progress = "progess",
@@ -20,12 +21,19 @@ export interface Upload {
   uploadId: string;
   uploadSizeInBytes: number;
   originalSizeInBytes: number;
+  compressedSizeInBytes?: number;
+  remoteUrl?: string;
 }
+
+const MAX_WIDTH = 1000;
+const MAX_HEIGHT = 1000;
+const QUALITY = 0.8;
 
 interface UploadState {
   uploads: Map<string, Upload>;
   addUploads: (files: File[]) => void;
   cancelUpload: (uploadId: string) => void;
+  retryUpload: (uploadId: string) => void;
 }
 
 enableMapSet();
@@ -47,9 +55,23 @@ export const useUploads = create<UploadState, [["zustand/immer", never]]>(
       if (!upload) {
         return;
       }
+      const abortController = new AbortController();
       try {
-        await uploadFileToStorage({
+        const compressedFile = await compressImage({
           file: upload.file,
+          maxWidth: MAX_WIDTH,
+          maxHeight: MAX_HEIGHT,
+          quality: QUALITY,
+        });
+        updateUpload(uploadId, {
+          compressedSizeInBytes: compressedFile.size,
+          uploadSizeInBytes: 0,
+          remoteUrl: undefined,
+          abortController,
+          status: UploadStatus.progress,
+        });
+        const { url } = await uploadFileToStorage({
+          file: compressedFile,
           signal: upload.abortController.signal,
           onProgress(sizeInBytes) {
             updateUpload(uploadId, { uploadSizeInBytes: sizeInBytes });
@@ -57,6 +79,7 @@ export const useUploads = create<UploadState, [["zustand/immer", never]]>(
         });
         updateUpload(uploadId, {
           status: UploadStatus.success,
+          remoteUrl: url,
         });
       } catch (error) {
         if (error instanceof CanceledError) {
@@ -96,12 +119,20 @@ export const useUploads = create<UploadState, [["zustand/immer", never]]>(
       if (!upload) {
         return;
       }
-      upload.abortController.abort();
+      upload.abortController?.abort();
+
+      updateUpload(upload.uploadId, {
+        status: UploadStatus.canceled,
+      });
+    }
+    function retryUpload(uploadId: string) {
+      processUploads(uploadId);
     }
     return {
       uploads: new Map(),
       addUploads,
       cancelUpload,
+      retryUpload,
     };
   })
 );
@@ -123,7 +154,10 @@ export const usePendingUploads = () => {
 
       const { total, uploaded } = uploads.reduce(
         (acc, upload) => {
-          acc.total += upload.originalSizeInBytes;
+          if (!upload.compressedSizeInBytes) {
+            return acc;
+          }
+          acc.total += upload.compressedSizeInBytes || 0;
           acc.uploaded += upload.uploadSizeInBytes;
           return acc;
         },

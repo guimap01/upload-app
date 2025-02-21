@@ -4,6 +4,7 @@ import * as Progress from "@radix-ui/react-progress";
 import { Button } from "./ui/Button";
 import { UploadStatus, useUploads, type Upload } from "../store/uploads";
 import { formatFileSize } from "../utils/formatFileSize";
+import { downloadUrl } from "../utils/downloadUrl";
 
 interface UploadWidgetItemProps {
   upload: Upload;
@@ -11,9 +12,14 @@ interface UploadWidgetItemProps {
 
 export function UploadWidgetItem({ upload }: UploadWidgetItemProps) {
   const cancelUpload = useUploads((store) => store.cancelUpload);
+  const retryUpload = useUploads((store) => store.retryUpload);
 
   const progress = Math.min(
-    Math.round((upload.uploadSizeInBytes * 100) / upload.originalSizeInBytes),
+    upload.compressedSizeInBytes
+      ? Math.round(
+          (upload.uploadSizeInBytes * 100) / upload.compressedSizeInBytes
+        )
+      : 0,
     100
   );
 
@@ -27,7 +33,7 @@ export function UploadWidgetItem({ upload }: UploadWidgetItemProps) {
       <div className="flex flex-col gap-1">
         <span className="text-xs font-medium flex items-center gap-1">
           <ImageUp className="size-3 text-zinc-300" strokeWidth={1.5} />
-          <span>{upload.name}</span>
+          <span className="max-w-[180px] truncate">{upload.name}</span>
         </span>
 
         <span className="text-xxs text-zinc-400 flex gap-1.5 items-center">
@@ -36,8 +42,16 @@ export function UploadWidgetItem({ upload }: UploadWidgetItemProps) {
           </span>
           <div className="size-1 rounded-full bg-zinc-700" />
           <span>
-            300KB
-            <span className="text-green-400 ml-1">-94%</span>
+            {formatFileSize(upload.compressedSizeInBytes || 0)}
+            <span className="text-green-400 ml-1">
+              -
+              {Math.round(
+                upload.originalSizeInBytes -
+                  ((upload.compressedSizeInBytes || 0) * 100) /
+                    upload.originalSizeInBytes
+              )}
+              %
+            </span>
           </span>
           <div className="size-1 rounded-full bg-zinc-700" />
           {upload.status === UploadStatus.success && <span>100%</span>}
@@ -68,14 +82,20 @@ export function UploadWidgetItem({ upload }: UploadWidgetItemProps) {
       <div className="absolute top-2.5 right-2.5 flex items-center gap-1">
         <Button
           size="icon-sm"
-          disabled={upload.status !== UploadStatus.success}
+          aria-disabled={!upload.remoteUrl}
+          onClick={() => {
+            if (upload.remoteUrl) {
+              downloadUrl(upload.remoteUrl);
+            }
+          }}
         >
           <Download className="size-4" strokeWidth={1.5} />
           <span className="sr-only">Downlaod compressed image</span>
         </Button>
         <Button
           size="icon-sm"
-          disabled={upload.status !== UploadStatus.success}
+          disabled={!upload.remoteUrl}
+          onClick={() => navigator.clipboard.writeText(upload.remoteUrl || "")}
         >
           <Link2 className="size-4" strokeWidth={1.5} />
           <span className="sr-only">Copy remote URL</span>
@@ -85,6 +105,7 @@ export function UploadWidgetItem({ upload }: UploadWidgetItemProps) {
           disabled={
             ![UploadStatus.canceled, UploadStatus.error].includes(upload.status)
           }
+          onClick={() => retryUpload(upload.uploadId)}
         >
           <RefreshCcw className="size-4" strokeWidth={1.5} />
           <span className="sr-only">Retry upload</span>
